@@ -1,0 +1,120 @@
+import os
+import re
+from typing import Optional
+from urllib.parse import \
+    urljoin  # Für die Konvertierung von relativen zu absoluten URLs
+
+import bs4
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+
+
+# Web Scraper Klasse
+class WebScraper:
+    def __init__(self, keywords:list, max_depth:int=2):
+        self.keywords = keywords
+        self.visited_urls = set()  # Um bereits besuchte URLs zu tracken
+        self.max_depth = max_depth  # Maximale Tiefe der Verlinkungen
+        self.extracted_texts = set()  # Set zum Vermeiden von doppelten Texten
+        self.results = []  # Liste für die Ergebnisse (für DataFrame)
+
+    # Funktion zum Abrufen und Parsen der Seite
+    def fetch_page(self, url:str) -> Optional[str]:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as e:
+            print(f"Fehler beim Abrufen der Seite: {e}")
+            return None
+
+    # Funktion zum Finden der Keywords im Text
+    def search_keywords(self, text:str) -> bool:
+        for keyword in self.keywords:
+            if re.search(r'\b' + re.escape(keyword) + r'\b', text, re.IGNORECASE):
+                return True
+        return False
+
+    # Funktion, um alle relevanten Links und Texte von einem Parent zu extrahieren
+    def extract_from_parent(self, parent:bs4.element.Tag, current_url:str) -> list:
+        result = []
+        # Durchlaufe alle untergeordneten Tags des Parent
+        for descendant in parent.descendants:
+            if descendant.name == 'a' and descendant.has_attr('href'):
+                href = descendant['href']
+                # Konvertiere relative Links in absolute Links
+                absolute_href = urljoin(current_url, href)
+                result.append((current_url, descendant.string.strip() if descendant.string else "", absolute_href))
+            elif descendant.string and descendant.string.strip():  # Extrahiere den Text
+                text = descendant.string.strip()
+                if text not in self.extracted_texts:  # Überprüfe, ob der Text schon extrahiert wurde
+                    self.extracted_texts.add(text)
+                    result.append((current_url, text, ""))  # Leerer Link, da es sich um normalen Text handelt
+        return result
+
+    # Funktion, um alle relevanten Links und Texte von einer Seite zu extrahieren
+    def extract_links_and_texts(self, soup:BeautifulSoup, base_url:str) -> list:
+        results = []
+
+        # 1. Durchsuche alle <p>-Tags nach Stichwörtern
+        for p_tag in soup.find_all('p'):
+            if self.search_keywords(p_tag.get_text()):
+                # Iteriere über den Parent des <p>-Tags
+                parent = p_tag.parent
+                if parent:
+                    # Extrahiere Texte und Links aus dem Parent-Tag
+                    parent_results = self.extract_from_parent(parent, base_url)
+                    results.extend(parent_results)
+
+        # 2. Durchsuche alle <a>-Tags nach Stichwörtern im Text
+        for a_tag in soup.find_all('a', href=True):
+            if self.search_keywords(a_tag.get_text()):
+                href = a_tag['href']
+                # Konvertiere relative Links in absolute Links
+                absolute_href = urljoin(base_url, href)
+                text = a_tag.get_text().strip()
+                if text and text not in self.extracted_texts:
+                    self.extracted_texts.add(text)
+                    results.append((base_url, text, absolute_href))
+
+        return results
+
+    # Funktion zum Scrapen von URLs bis zur maximalen Tiefe
+    def scrape(self, url:str, depth:int=0) -> None:
+        if depth > self.max_depth or url in self.visited_urls:
+            return  # Breche ab, wenn die maximale Tiefe erreicht ist oder URL schon besucht wurde
+
+        self.visited_urls.add(url)
+
+        # Abrufen der Seite
+        page_content = self.fetch_page(url)
+        if not page_content:
+            return
+
+        # Parsen der HTML-Seite
+        soup = BeautifulSoup(page_content, 'html.parser')
+
+        # Extrahiere relevante Links und Texte
+        page_results = self.extract_links_and_texts(soup, url)
+
+        if page_results:
+            self.results.extend(page_results)
+
+        # Verfolge gefundene Links weiter
+        for _, _, link in page_results:
+            if link:
+                self.scrape(link, depth + 1)
+
+    # Funktion zum Speichern der Ergebnisse als CSV
+    def save_results_to_csv(self, filename:str, folder:str=None) -> None:
+        # Erstelle DataFrame aus den Ergebnissen
+        df = pd.DataFrame(self.results, columns=['URL', 'Text', 'Link'])
+        if folder:
+            if not os.path.exists(f"./{folder}"):
+                os.mkdir(f"./{folder}")
+            filename = f"{folder}/{filename}"
+        df.to_csv(filename, index=False)
+        print(f"Ergebnisse wurden in {filename} gespeichert.")
+
+
