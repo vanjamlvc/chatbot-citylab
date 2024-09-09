@@ -14,14 +14,22 @@ services:
       - ./data/flowise/.flowise:/root/.flowise
 
   api:
-    image: localai/localai:latest-aio-cpu
+    # image: localai/localai:latest-aio-cpu
     # For a specific version:
     # image: localai/localai:v2.20.1-aio-cpu
     # For Nvidia GPUs decomment one of the following (cuda11 or cuda12):
     # image: localai/localai:v2.20.1-aio-gpu-nvidia-cuda-11
     # image: localai/localai:v2.20.1-aio-gpu-nvidia-cuda-12
     # image: localai/localai:latest-aio-gpu-nvidia-cuda-11
+    image: localai/localai:latest-gpu-nvidia-cuda-12
     # image: localai/localai:latest-aio-gpu-nvidia-cuda-12
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
       interval: 1m
@@ -34,6 +42,28 @@ services:
       # ...
     volumes:
       - ./data/localai/models:/build/models:cached
+      # - ./data/localai/models:/build/models
+       
+  db:
+    # Official Postgres image from DockerHub (we use the last version)
+    image: pgvector/pgvector:pg16
 
+    # By default, a Postgres database is running on the 5432 port.
+    # If we want to access the database from our computer (outside the container),
+    # we must share the port with our computer's port.
+    # The syntax is [port we want on our machine]:[port we want to retrieve in the container]
+    # Note: You are free to change your computer's port,
+    # but take into consideration that it will change the way
+    # you are connecting to your database.
+    ports:
+      - 127.0.0.1:5432:5432
+
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+    environment:
+      POSTGRES_USER: username # The PostgreSQL user (useful to connect to the database)
+      POSTGRES_PASSWORD: password # The PostgreSQL password (useful to connect to the database)
+      POSTGRES_DB: default_database # The PostgreSQL default database (automatically created at
 
 # auth !$pB^4Na9LEeoZRc
