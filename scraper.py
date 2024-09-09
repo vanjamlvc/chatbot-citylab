@@ -8,6 +8,7 @@ import bs4
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from json import dump, loads
 
 
 # Web Scraper Klasse
@@ -106,15 +107,36 @@ class WebScraper:
             if link:
                 self.scrape(link, depth + 1)
 
-    # Funktion zum Speichern der Ergebnisse als CSV
-    def save_results_to_csv(self, filename:str, folder:str=None) -> None:
+    # Funktion zum Speichern der Ergebnisse als CSV oder JSON
+    def save_results_to_file(self, filename:str, folder:str=None, filetype:str= "json") -> None:
         # Erstelle DataFrame aus den Ergebnissen
         df = pd.DataFrame(self.results, columns=['URL', 'Text', 'Link'])
         if folder:
             if not os.path.exists(f"./{folder}"):
                 os.mkdir(f"./{folder}")
             filename = f"{folder}/{filename}"
-        df.to_csv(filename, index=False)
-        print(f"Ergebnisse wurden in {filename} gespeichert.")
+
+        if filetype == "csv":
+            filename = f"{filename}.csv"
+            df.to_csv(filename, index=False)
+            print(f"Ergebnisse wurden in {filename} gespeichert.")
+
+        elif filetype == "json":
+            filename = f"{filename}.json"
+            try:
+                with open(filename, "w", encoding = "utf-8") as file:
+                    # file.write(df.to_json(orient="index"))
+                    dump(
+                        loads(df.to_json(orient="index")),
+                        fp= file, 
+                        indent = 4, 
+                        ensure_ascii = False
+                    )
+        
+                print(f"Ergebnisse wurden in {filename} gespeichert.")
+            except IOError:
+                print(f"Error: {filename} konnte nicht erstellt werden")
+
+
 
 
