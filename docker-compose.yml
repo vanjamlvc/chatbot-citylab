@@ -14,22 +14,22 @@ services:
       - ./data/flowise/.flowise:/root/.flowise
 
   api:
-    # image: localai/localai:latest-aio-cpu
+    image: localai/localai:latest-aio-cpu
     # For a specific version:
     # image: localai/localai:v2.20.1-aio-cpu
     # For Nvidia GPUs decomment one of the following (cuda11 or cuda12):
     # image: localai/localai:v2.20.1-aio-gpu-nvidia-cuda-11
     # image: localai/localai:v2.20.1-aio-gpu-nvidia-cuda-12
     # image: localai/localai:latest-aio-gpu-nvidia-cuda-11
-    image: localai/localai:latest-gpu-nvidia-cuda-12
+    # image: localai/localai:latest-gpu-nvidia-cuda-12
     # image: localai/localai:latest-aio-gpu-nvidia-cuda-12
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    #deploy:
+     # resources:
+      #  reservations:
+       #   devices:
+        #    - driver: nvidia
+         #     count: 1
+          #    capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
       interval: 1m
@@ -56,7 +56,7 @@ services:
     # but take into consideration that it will change the way
     # you are connecting to your database.
     ports:
-      - 127.0.0.1:5432:5432
+      - 127.0.0.1:5444:5432
 
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
