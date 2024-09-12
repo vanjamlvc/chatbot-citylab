@@ -1,17 +1,18 @@
-version: "3.1"
-
 services:
   flowise:
     image: elestio/flowiseai
     restart: always
     environment:
       - PORT=3000
+      - FLOWISE_FILE_SIZE_LIMIT=300mb 
       # - FLOWISE_USERNAME=${USERNAME}
       # - FLOWISE_PASSWORD=${ADMIN_PASSWORD}
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
+      # - "127.0.0.1:3000:3000"
     volumes:
       - ./data/flowise/.flowise:/root/.flowise
+      - ./data/html:/root/html
 
   api:
     # image: localai/localai:latest-aio-cpu
@@ -36,34 +37,34 @@ services:
       timeout: 20m
       retries: 5
     ports:
-      - 127.0.0.1:8080:8080
-    environment:
-      - DEBUG=true
+      - 8080:8080
+    # environment:
+      # - DEBUG=true
       # ...
     volumes:
       - ./data/localai/models:/build/models:cached
       # - ./data/localai/models:/build/models
        
-  db:
+  postgres:
     # Official Postgres image from DockerHub (we use the last version)
     image: pgvector/pgvector:pg16
-
-    # By default, a Postgres database is running on the 5432 port.
-    # If we want to access the database from our computer (outside the container),
-    # we must share the port with our computer's port.
-    # The syntax is [port we want on our machine]:[port we want to retrieve in the container]
-    # Note: You are free to change your computer's port,
-    # but take into consideration that it will change the way
-    # you are connecting to your database.
     ports:
-      - 127.0.0.1:5432:5432
+      - 5432:5432
 
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
 
     environment:
-      POSTGRES_USER: username # The PostgreSQL user (useful to connect to the database)
+      POSTGRES_USER: postgres # The PostgreSQL user (useful to connect to the database)
       POSTGRES_PASSWORD: password # The PostgreSQL password (useful to connect to the database)
       POSTGRES_DB: default_database # The PostgreSQL default database (automatically created at
 
-# auth !$pB^4Na9LEeoZRc
+
+
+  redis:
+    image: redis/redis-stack
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - ./data/redis:/data
