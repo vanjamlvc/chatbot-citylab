@@ -1,24 +1,29 @@
 import os
 import re
+from urllib.robotparser import RobotFileParser
+import json
 from typing import Optional
 from urllib.parse import \
     urljoin  # Für die Konvertierung von relativen zu absoluten URLs
+from urllib.parse import urlparse
 
 import bs4
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from json import dump, loads
 
 
 # Web Scraper Klasse
 class WebScraper:
     def __init__(self, keywords:list, max_depth:int=2):
+        self._base_url = None
         self.keywords = keywords
         self.visited_urls = set()  # Um bereits besuchte URLs zu tracken
         self.max_depth = max_depth  # Maximale Tiefe der Verlinkungen
         self.extracted_texts = set()  # Set zum Vermeiden von doppelten Texten
         self.results = []  # Liste für die Ergebnisse (für DataFrame)
+        self.useragent = "BerlinSummerSchool2024WebScraper/0.1"
+        self.robot_parser_cache = {}
 
 
     # Funktion zum Abrufen und Parsen der Seite
@@ -33,7 +38,8 @@ class WebScraper:
         """
 
         try:
-            response = requests.get(url)
+            headers = {"User-Agent" : self.useragent}
+            response = requests.get(url, headers= headers)
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:
@@ -53,7 +59,7 @@ class WebScraper:
         """
 
         for keyword in self.keywords:
-            if re.search(r'\b' + re.escape(keyword) + r'\b', text, re.IGNORECASE):
+            if re.search(re.escape(keyword), text, re.IGNORECASE):
                 return True
         return False
     
@@ -118,17 +124,58 @@ class WebScraper:
         return results
     
 
+    def is_scraping_allowed(self, url):
+        """
+        This function determines the host name of the url passed to it and searches for a robots.txt. 
+        If a robots.txt is found, it is searched for the universal useragent * and for the useragent of the WebScraper. 
+        Returns true if the useragent is allowed to scrape the url passed to the function, otherwise false. 
+
+        Parameters
+        ----------
+        url : str
+            The URL of the page for which you want to check whether it can be scraped
+        """
+        try:
+            o = urlparse(url)
+            robots_url = f"{o.scheme}://{o.hostname}/robots.txt"
+            
+            # Überprüfen, ob die `robots.txt` bereits gecached ist
+            if robots_url not in self.robot_parser_cache:
+                robot_parser = RobotFileParser()
+                robot_parser.set_url(robots_url)
+                robot_parser.read()
+                self.robot_parser_cache[robots_url] = robot_parser
+            else:
+                robot_parser = self.robot_parser_cache[robots_url]
+
+            # Überprüfen, ob die URL von dem allgemeinen und spezifischen User-Agent gescrapt werden darf
+            can_fetch_general = robot_parser.can_fetch("*", url)
+            can_fetch_useragent = robot_parser.can_fetch(self.useragent, url)
+
+            return can_fetch_general and can_fetch_useragent
+
+        except Exception as e:
+            print(f"Fehler beim Zugriff auf robots.txt oder beim Parsen der URL: {e}")
+            return False  # Rückgabe von False, wenn ein Fehler auftritt
+
+
     # Funktion zum Scrapen von URLs bis zur maximalen Tiefe
     def scrape(self, url:str, depth:int=0) -> None:
         """
         Parameters
         ----------
         url : str
-            
+            The URL of the page to be scraped
         depth : int
         """
         if depth > self.max_depth or url in self.visited_urls:
             return  # Breche ab, wenn die maximale Tiefe erreicht ist oder URL schon besucht wurde
+        
+        self.base_url = url
+        
+        if not self.is_scraping_allowed(url):
+            print(f"Error: not allowed to enter {url}")
+            return # Breche ab, wenn die robots.txt etwas für den useragent untersagt
 
         self.visited_urls.add(url)
 
@@ -153,15 +200,18 @@ class WebScraper:
 
 
     # Funktion zum Speichern der Ergebnisse als CSV oder JSON
-    def save_results_to_file(self, filename:str, folder:str=None, filetype:str= "json") -> None:
+    def save_results_to_file(self, filename:str, folder:str=None, filetype:str= "json", append_existing_file:bool=False) -> None:
         """
         Parameters
         ----------
         filename : str
+            name of the file without .filetype
             
-        folder : str
+        folder : str, default None
 
-        filetype : str
+        filetype : str, default "json"
+
+        append_existing_file : bool, default False
         """
         # Erstelle DataFrame aus den Ergebnissen
         df = pd.DataFrame(self.results, columns=['URL', 'Text', 'Link'])
@@ -169,33 +219,80 @@ class WebScraper:
         if folder:
             if not os.path.exists(f"./{folder}"):
                 os.mkdir(f"./{folder}")
-            filename = f"{folder}/{filename}"
+            filename = f"{folder}/{filename}.{filetype}"
 
         if filetype == "csv":
-            filename = f"{filename}.csv"
-            df.to_csv(filename, index=False)
-            print(f"Ergebnisse wurden in {filename} gespeichert.")
+            # filename = f"{filename}.csv"
+            if append_existing_file and os.path.exists(filename):
+                pass
+            else:
+                df.to_csv(filename, index=False)
+                print(f"Ergebnisse wurden in {filename} gespeichert.")
 
         elif filetype == "json":
-            filename = f"{filename}.json"
-            try:
-                with open(filename, "w", encoding = "utf-8") as file:
-                    # file.write(df.to_json(orient="index"))
-                    dump(
-                        loads(df.to_json(orient="index")),
-                        fp= file, 
-                        indent = 4, 
-                        ensure_ascii = False
-                    )
-        
-                print(f"Ergebnisse wurden in {filename} gespeichert.")
-            except IOError:
-                print(f"Error: {filename} konnte nicht erstellt werden")
+            # filename = f"{filename}.json"
+            if append_existing_file and os.path.exists(filename):
+                try:
+                    # Überprüfen, ob die Datei existiert und nicht leer ist
+                    if os.path.exists(filename) and os.stat(filename).st_size > 0:
+                        with open(filename, "r", encoding="utf-8") as file:
+                            try:
+                                # JSON-Inhalt lesen
+                                input_json = json.load(file)
+                            except json.JSONDecodeError:
+                                print(f"Error: {filename} enthält kein gültiges JSON.")
+                                input_json = {}
+                    else:
+                        input_json = {}
+
+                    # DataFrame-Index setzen
+                    # print(df.head().to_dict())
+                    df.set_index("URL", drop=True, inplace=True)
+                    # print(df.head().to_dict())
+
+                    # Überprüfen, ob das Keyword im JSON existiert
+                    if self.keywords[0] in input_json:
+                        input_json[self.keywords[0]].update(df.to_dict(orient = "index"))
+                    else:
+                        input_json[self.keywords[0]] = df.to_dict(orient = "index")
+
+                    # Datei im Schreibmodus öffnen und aktualisiertes JSON speichern
+                    with open(filename, "w", encoding="utf-8") as file:
+                        json.dump(input_json, file, indent=4, ensure_ascii=False)
+
+                    print(f"Ergebnisse zur Suche nach {self.keywords[0]} mit Basisadresse {self.base_url} wurden in {filename} gespeichert.")
+
+                except IOError:
+                    print(f"Error: {filename} konnte nicht ergänzt werden.")
+
+    
+            else: # append_existing_file = False or file does not exist yet
+                try:
+                    with open(filename, "w", encoding = "utf-8") as file:
+                        df.set_index("URL", drop=True, inplace = True)
+                        parsed_json = json.loads(df.to_json(orient="index"))
+                        parsed_json = {self.keywords[0] : parsed_json}
+                        json.dump(
+                            parsed_json,
+                            fp= file, 
+                            indent = 4, 
+                            ensure_ascii = False
+                        )
+            
+                    print(f"Ergebnisse zur Suche nach {self.keywords[0]} mit Basisadresse {self.base_url} wurden in {filename} gespeichert.")
+                except IOError:
+                    print(f"Error: {filename} konnte nicht erstellt werden")
 
 
     # Funktion zum kürzen eines DataFrames mit Scrape Results durch löschen von Text Dopplungen 
     def clean_up_result(self, df:pd.DataFrame, dup_column:str, prefer_column:str=None) -> pd.DataFrame:
         """
+        This function deletes duplicates that occur in the column dup_column in the DataFrame df. 
+        If prefer_column is None, the first of all rows in which the dup_column column has duplicate values is retained. 
+        If a column is specified with prefer_column, the first row in which the prefer_column column has a value other than None is retained 
+        from all rows in which the dup_column column has duplicate values.
+
+
         Parameters
         ----------
         df : pd.DataFrame
@@ -204,7 +301,7 @@ class WebScraper:
             Name of the column from which duplicates are to be deleted
 
         prefer_column : str
-            Name of the column whose content should be retained when deleting duplicates from the dupc_column
+            Name of the column whose content should be retained when deleting duplicates from the dup_column
 
         """
         def select_row(group):
@@ -219,19 +316,35 @@ class WebScraper:
                 return group.iloc[0]
             
         def merge_text_on_adress(df):
-            df_merged = df.groupby(["URL", "Link"], as_index=False).agg({
+            df_merged = df.groupby(["URL", "Link"], as_index=False, dropna = False).agg({
                 'Text': lambda x: ' '.join(x)  
             })
     
             return df_merged
 
-        # Wende die Funktion auf jede Gruppe von Spalte dup_column an
         df_cleaned = df.groupby(dup_column, group_keys=False).apply(select_row)
         df_cleaned.reset_index(inplace=True, drop=True)
         df_cleaned = merge_text_on_adress(df_cleaned)
-        return df_cleaned
-            
+        df_cleaned = df_cleaned.groupby("URL", as_index=False).agg({
+                                                                "Text" : lambda x: " ".join(x),
+                                                                "Link" : lambda x: list(filter(None, x))
+                                                                })
 
+        return df_cleaned
+    
+    @property
+    def base_url(self):
+        return self._base_url
+    
+    @base_url.setter
+    def base_url(self, url):
+        if not self._base_url:
+            self._base_url = url
+
+
+
+    
+ 
 
 
 
