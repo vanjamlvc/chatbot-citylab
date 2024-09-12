@@ -16,14 +16,15 @@ from bs4 import BeautifulSoup
 # Web Scraper Klasse
 class WebScraper:
     def __init__(self, keywords:list, max_depth:int=2):
-        self._base_url = None
-        self.keywords = keywords
+        self._base_url = None # erste Adresse die vom Scraper aufgerufen wird (die der Methode scrape übergeben wird)
+        self.keywords = keywords # Liste der Stichwörter nach denen im html der aufgerufenen Seiten gesucht wird
         self.visited_urls = set()  # Um bereits besuchte URLs zu tracken
         self.max_depth = max_depth  # Maximale Tiefe der Verlinkungen
         self.extracted_texts = set()  # Set zum Vermeiden von doppelten Texten
         self.results = []  # Liste für die Ergebnisse (für DataFrame)
         self.useragent = "BerlinSummerSchool2024WebScraper/0.1"
-        self.robot_parser_cache = {}
+        self.robot_parser_cache = {} # dict der gecachten robots.txt 
+        self.siteshtml = {} # dict der html body der besuchten Seiten
 
 
     # Funktion zum Abrufen und Parsen der Seite
@@ -172,12 +173,15 @@ class WebScraper:
             return  # Breche ab, wenn die maximale Tiefe erreicht ist oder URL schon besucht wurde
         
         self.base_url = url
+
+        if url in self.visited_urls:
+            return # Breche ab, wenn die Seite schon besucht wurde
+        
+        self.visited_urls.add(url)
         
         if not self.is_scraping_allowed(url):
             print(f"Error: not allowed to enter {url}")
             return # Breche ab, wenn die robots.txt etwas für den useragent untersagt
-
-        self.visited_urls.add(url)
 
         # Abrufen der Seite
         page_content = self.fetch_page(url)
@@ -186,6 +190,9 @@ class WebScraper:
 
         # Parsen der HTML-Seite
         soup = BeautifulSoup(page_content, 'html.parser')
+
+        # füge die gesamte HTML Seite dem dict htmlcontents ein
+        self.siteshtml[url] = str(soup.find('body'))
 
         # Extrahiere relevante Links und Texte
         page_results = self.extract_links_and_texts(soup, url)
@@ -208,10 +215,12 @@ class WebScraper:
             name of the file without .filetype
             
         folder : str, default None
+            name of the folder the file should be stored in
 
         filetype : str, default "json"
 
         append_existing_file : bool, default False
+            just works with filetype = "json"
         """
         # Erstelle DataFrame aus den Ergebnissen
         df = pd.DataFrame(self.results, columns=['URL', 'Text', 'Link'])
@@ -246,9 +255,7 @@ class WebScraper:
                         input_json = {}
 
                     # DataFrame-Index setzen
-                    # print(df.head().to_dict())
                     df.set_index("URL", drop=True, inplace=True)
-                    # print(df.head().to_dict())
 
                     # Überprüfen, ob das Keyword im JSON existiert
                     if self.keywords[0] in input_json:
@@ -332,6 +339,46 @@ class WebScraper:
 
         return df_cleaned
     
+    
+    def save_html(self, filename:str, folder:str=None):
+        """
+        saves the scraped html bodys as json with the url of the website as key and the html body as value of the type string
+
+        Parameters:
+        -----------
+        filename : str
+            name of the file without .filetype
+            
+        folder : str, default None
+            name of the folder the file should be stored in
+        """
+        filetype = "json"
+
+        if folder:
+            if not os.path.exists(f"./{folder}"):
+                os.mkdir(f"./{folder}")
+            filename = f"{folder}/{filename}.{filetype}"
+        
+        if filetype == "json":
+            
+            # Wenn die Datei bereits existiert, laden wir die vorhandenen Daten
+            if os.path.exists(filename):
+                with open(filename, 'r') as f:
+                    try:
+                        existing_data = json.load(f)
+                    except json.JSONDecodeError:
+                        existing_data = {}
+            else:
+                existing_data = {}
+
+            # Update die vorhandenen Daten mit dem neuen Dictionary
+            existing_data.update(self.siteshtml)
+
+            # Speichern der aktualisierten Daten in der JSON-Datei
+            with open(filename, 'w') as f:
+                json.dump(existing_data, f, indent=4)
+
+    
     @property
     def base_url(self):
         return self._base_url
@@ -340,11 +387,3 @@ class WebScraper:
     def base_url(self, url):
         if not self._base_url:
             self._base_url = url
-
-
-
-    
- 
-
-
-
