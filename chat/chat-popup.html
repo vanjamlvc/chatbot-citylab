@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BerlinBuddy Chatbot</title>
+    <style>
+        html, body {
+        margin: 0;
+        height: 100%;
+        }
+        iframe {
+        border: none;
+        width: 100%;
+        height: 100%;
+        }
+    </style>
+</head>
+<body>
+<iframe src="https://www.htw-berlin.de/" ></iframe>
+<script type="module">
+    import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
+    Chatbot.init({
+        chatflowid: "d74d52fb-e25f-485d-b7e0-349d34d4eeb1",
+        apiHost: "http://localhost:3000",
+        chatflowConfig: {
+            // topK: 2
+        },
+        theme: {
+            "button": {
+                "backgroundColor": "#76b900",
+                "right": 20,
+                "bottom": 20,
+                "size": "medium",
+                "iconColor": "white",
+                "customIconSrc": "png/chaticon.png"
+  },
+            tooltip: {
+                showTooltip: true,
+                tooltipMessage: 'Ask me something',
+                tooltipBackgroundColor: '#76b900',
+                tooltipTextColor: 'black',
+                tooltipFontSize: 16,
+            },
+            "chatWindow": {
+                "title": "BerlinBuddy",
+                "welcomeMessage": "Welcome to BerlinBuddy!  How can I assist you today?",
+                "backgroundColor": "#ffffff",
+                "height": "700",
+                "width": 400,
+                "fontSize": 16,
+                "poweredByTextColor": "#ffffff",
+            "botMessage": {
+                "backgroundColor": "#f3f8e9",
+                "textColor": "#303235",
+                "showAvatar": true,
+                "avatarSrc": "png/chat-bot.png"
+    },
+            "userMessage": {
+                "backgroundColor": "#76b900",
+                "textColor": "#ffffff",
+                "showAvatar": true,
+                "avatarSrc": "https://raw.githubusercontent.com/zahidkhawaja/langchain-chat-nextjs/main/public/usericon.png"
+    },
+            "textInput": {
+                "placeholder": "Type your question",
+                "backgroundColor": "#ffffff",
+                "textColor": "#303235",
+                "sendButtonColor": "#76b900"},
+                feedback: {
+                    color: '#303235',
+                },
+                footer: {
+                    textColor: '#303235',
+                    text: 'BerlinBuddy can make mistakes. Verify important information. Powered by',
+                    company: 'Flowise',
+                    companyLink: 'https://flowiseai.com'
+
+                }
+            }
+        }
+    })
+</script>
+
+</body>
+</html>
