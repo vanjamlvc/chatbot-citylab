@@ -3,6 +3,5 @@ models/
 data/postgres
 data/flowise/.flowise/storage/*
 .idea
-*.pdf
 data/flowise/.flowise/database.sqlite
 dump.rdb
