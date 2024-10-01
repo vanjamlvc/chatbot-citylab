@@ -10,6 +10,11 @@ Für die Entwicklung des Chatbots wurde [Flowise.ai](https://flowiseai.com), ein
 Die erstellte Präsentation, sowie der OnePager und das auf der Transferale präsentierte Plakat sind im [doc](doc) Verzeichnis zu finden.
 
 ## Architektur
+![Flow](doc/flow.png)
+Die Daten werden über den Cheerio Webscraper abgerufen, dabei können auch Links tieferer Ebenen verwendet werden. Aus diesen Daten und den daraus durch LocalAi generierten Embeddings werden Einträge in einer Postgres-Vektordatenbank erstellt. 
+Es gibt einen Record Manager, welcher verhindert das es zu doppelten Einträgen kommmt.    
+Die Conversational Retrieval Chain nutzt Llama 3.1 über LocalAi mit einem RedisCache als Chat Modell.   
+Die Postgresdatenbank ist der Vector Store. Zusätzslich gibt es noch Redis-Backed-Chat Memory um unterschiedliche Konversationen führen zu können und eine einfache Input Moderation, welche wieder über Llama 3.1 läuft.
 
 
 ## Installation
